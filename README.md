@@ -28,8 +28,5 @@ The code allows the "coop door" to run connected to your wifi, or as stand alone
 
 ![Wifi Mode](http://i.imgur.com/fxGEhEJ.jpg)
 
-## Time Zone Configuration:
-
-![Time Zone](http://i.imgur.com/VWPy98l.jpg) 
 
 
