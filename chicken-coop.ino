@@ -452,22 +452,15 @@ void doDynDNSHTMLPage()
 
 void readDynDNSfromEEPROM()
 {
-	DEBUG_println("read");
+	DEBUG_println("read dyndns eeprom");
 	EEPROM_readAnything(50, configuration);
-	DEBUG_println(configuration.dyndnsname);
-	DEBUG_println(configuration.dyndnsuser);
-	DEBUG_println(configuration.dyndnspass);
 }
 
 void saveDynDNStoEEPROM()
 {
 	// we write the dyndns name, login, password to eeprom
 	// position 20, 21, 22 holds the size of each string, position 23 has the first field
-	DEBUG_println("save");	
-	DEBUG_println(configuration.dyndnsname);
-	DEBUG_println(configuration.dyndnsuser);
-	DEBUG_println(configuration.dyndnspass);
-
+	DEBUG_println("save dyndns eeprom");	
 	EEPROM_writeAnything(50, configuration);
 }
 
@@ -653,23 +646,6 @@ void closeDoor()
 	mainHTMLPage();
 }
 
-// Read TimeZone from EEPROM
-int readTZ()
-{
-	int tz;
-	EEPROM_readAnything(0, tz);
-	DEBUG_print("Found TZ: ");
-	DEBUG_println(tz);
-	return tz;
-}
-
-// Write TimeZone from EEPROM
-void writeTZ(int tz)
-{
-	DEBUG_print("New TZ: ");
-	DEBUG_println(tz);
-	EEPROM_writeAnything(0, tz);
-}
 
 void setAPFlag()
 {
@@ -794,7 +770,7 @@ boolean getNTPUnixTime()
 		// We've received a packet, read the data from it
 		udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
 	    //the timestamp starts at byte 40 of the received packet and is four bytes,
-		// or two words, long. First, esxtract the two words:
+		// or two words, long. First, extract the two words:
 		unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
 		unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
 		// combine the four bytes (two words) into a long integer
