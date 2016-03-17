@@ -1,3 +1,4 @@
+
 /**
 * Chicken Coop Door/Light controller for ESP8266 board.
 * Copyright 2016, Ioan Ghip <ioanghip (at) gmail (dot) com>
@@ -48,7 +49,7 @@
 #define DEBUG_println(val)
 #endif
 
-#define COOP_VERSION "5"
+#define COOP_VERSION "7"
 
 const String HTTP_HEAD_COOP = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><title>Chicken Coop</title>";
 const String HTTP_STYLE_COOP = "<style>div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} input[type=\"submit\"]{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;}</style>";
@@ -56,7 +57,8 @@ const String HTTP_HEAD_END_COOP = "</head><body><div style='font-family: verdana
 const String HTTP_END_COOP = "</div></body></html>";
 const String HTTP_BUTTON_COOP = "<p><form action=\"{ACT}\" method=\"get\"><button>{TXT}</button></form></p>";
 const String HTTP_LINK_CONFIG_COOP = "<p><a href=\"/RESET\" onclick=\"return confirm('Are you sure?');\">Configuration</a></p>";
-const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\"><p><input autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"text\" name=\"dyndnsname\"  value=\"{DYNN}\"</input></p><p><input autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"text\" name=\"dyndnsuser\"  value=\"{DYNU}\"</input></p><p><input autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"password\" name=\"dyndnspass\"  value=\"{DYNP}\"</input></p><p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
+const String HTTP_EDIT_COOP = "<p><label for=\"{ENAME}\">{LABEL}</label><input autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"{ETYPE}\" name=\"{ENAME}\" value=\"{EVALUE}\"</input></p>";
+const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\">{FIELDS}<p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
 const String HTTP_BEGIN_COOP = HTTP_HEAD_COOP + HTTP_STYLE_COOP + HTTP_HEAD_END_COOP;
 
 const char* serverOTAIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input style=button type='file' name='update'><input style=button type='submit' value='Update'></form>";
@@ -76,14 +78,14 @@ struct dyndns_t
 int door_relay = 2; // gpo2 - d4
 int light_relay = 14; // gop14 - d5
 
-// what is our longitude (west values negative) and latitude (south values negative)
+					  // what is our longitude (west values negative) and latitude (south values negative)
 float latitude = 44.9308; // if you use a GPS to sync time, the value is going to be replaced by the GPS 
 float longitude = -123.0289;
 
 // we will syncronize the time with an GPS connected tot pin gpo13 -> gps TX, gpo15 -> gpx RX
 static const int RXPin = 13; // gpo13 - d7
 static const int TXPin = 15; // gpo15 - d8
-// change the speed to match your GPS 
+							 // change the speed to match your GPS 
 static const uint32_t GPSBaud = 38400;
 
 SoftwareSerial SerialGPS = SoftwareSerial(RXPin, TXPin);
@@ -95,7 +97,7 @@ const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of th
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 
-// A UDP instance to let us send and receive packets over UDP
+									// A UDP instance to let us send and receive packets over UDP
 WiFiUDP udp;
 
 //Australia Eastern Time Zone (Sydney, Melbourne)
@@ -221,34 +223,44 @@ void setup()
 	MDNS.begin(host);
 
 	// Match the request for the web server
-	webServer.on("/", mainPage);
+	webServer.on("/", mainHTMLPage);
 	webServer.on("/ACT=OPEN", openDoor);
 	webServer.on("/ACT=CLOSE", closeDoor);
 	webServer.on("/ACT=LON", lightOn);
 	webServer.on("/ACT=LOFF", lightOff);
-	webServer.on("/RESET", resetToAPPage);
-	webServer.on("/AP", doAP);
-	webServer.on("/WIFI", doWiFi);
-	webServer.on("/DYNDNS", doDynDNS);
-	webServer.on("/SAVE", HTTP_POST, []() 
+	webServer.on("/RESET", resetToAPHTMLPage);
+	webServer.on("/AP", doAPHTMLPage);
+	webServer.on("/WIFI", doWiFiHTMLPage);
+	webServer.on("/DYNDNS", doDynDNSHTMLPage);
+	webServer.on("/SAVE", HTTP_POST, []()
 	{
+		webServer.arg("dyndnsserver").toCharArray(configuration.dyndnsserver, 50);
 		webServer.arg("dyndnsname").toCharArray(configuration.dyndnsname, 50);
 		webServer.arg("dyndnsuser").toCharArray(configuration.dyndnsuser, 50);
 		webServer.arg("dyndnspass").toCharArray(configuration.dyndnspass, 50);
+		// save new values
 		saveDynDNStoEEPROM();
-		mainPage();
+		// update DNS
+		dynDNS();
+		// server the main page
+		mainHTMLPage();
 	});
 
-
+	webServer.on("/reboot", HTTP_GET, []()
+	{
+		webServer.send(200, "text/html", "Doesn't work yet");
+		//ESP.restart();
+	});
 
 	// web firmware update - start
-	webServer.on("/firmware", HTTP_GET, []() 
+	webServer.on("/firmware", HTTP_GET, []()
 	{
 		webServer.sendHeader("Connection", "close");
 		webServer.sendHeader("Access-Control-Allow-Origin", "*");
 		webServer.send(200, "text/html", serverOTAIndex);
 	});
 
+	// OTA from web post
 	webServer.on("/update", HTTP_POST, []() {
 		webServer.sendHeader("Connection", "close");
 		webServer.sendHeader("Access-Control-Allow-Origin", "*");
@@ -309,11 +321,12 @@ void setup()
 	// if we aren't an AP, do & schedule update with dyndns, enable OTA
 	if (!isAP)
 	{
+		// allow OTA update from inside Arduino IDE
+		enableOTAfromIDE();
 		// Update IP on Dynamic DNS
 		dynDNS();
 		// once a day, at 2AM update the IP with the dyndns
 		Alarm.alarmRepeat(2, 00, 0, dynDNS);
-		enableOTA();
 	}
 }
 
@@ -327,7 +340,7 @@ void loop()
 	Alarm.delay(0);
 }
 
-String makeButton(String action, String text)
+String makeHTMLButton(String action, String text)
 {
 	String btn = HTTP_BUTTON_COOP;
 	btn.replace("{ACT}", action);
@@ -335,7 +348,18 @@ String makeButton(String action, String text)
 	return btn;
 }
 
-void mainPage()
+
+String makeHTMLEdit(String label, String etype, String ename, String evalue)
+{
+	String edit = HTTP_EDIT_COOP;
+	edit.replace("{LABEL}", label);
+	edit.replace("{ETYPE}", etype);
+	edit.replace("{ENAME}", ename);
+	edit.replace("{EVALUE}", evalue);
+	return edit;
+}
+
+void mainHTMLPage()
 {
 	String page = HTTP_BEGIN_COOP;
 
@@ -347,20 +371,20 @@ void mainPage()
 
 	if (isDoorOpen)
 	{
-		page += makeButton("/ACT=CLOSE", "Close door");
+		page += makeHTMLButton("/ACT=CLOSE", "Close door");
 	}
 	else
 	{
-		page += makeButton("/ACT=OPEN", "Open door");
+		page += makeHTMLButton("/ACT=OPEN", "Open door");
 	}
 
 	if (isLightOn)
 	{
-		page += makeButton("/ACT=LOFF", "Light off");
+		page += makeHTMLButton("/ACT=LOFF", "Light off");
 	}
 	else
 	{
-		page += makeButton("/ACT=LON", "Light on");
+		page += makeHTMLButton("/ACT=LON", "Light on");
 	}
 
 	page += HTTP_LINK_CONFIG_COOP;
@@ -369,20 +393,21 @@ void mainPage()
 	webServer.send(200, "text/html", page);
 }
 
-void resetToAPPage()
+void resetToAPHTMLPage()
 {
 	String page = HTTP_BEGIN_COOP;
 	page += "Do you want to run as AP or<br>do you want to connect to a WiFi network?";
-	page += makeButton("/AP", "Make AP");
-	page += makeButton("/WIFI", "Connect to WiFi");
-	page += makeButton("/DYNDNS", "Dynamic DNS");
+	page += makeHTMLButton("/AP", "Make AP");
+	page += makeHTMLButton("/WIFI", "Connect to WiFi");
+	page += makeHTMLButton("/DYNDNS", "Dynamic DNS");
 	page += "<br>";
-	page += makeButton("/firmware", "Update firmware");
+	page += makeHTMLButton("/firmware", "Update firmware");
+	page += makeHTMLButton("/reboot", "Reboot");
 	page += HTTP_END_COOP;
 	webServer.send(200, "text/html", page);
 }
 
-void doAP()
+void doAPHTMLPage()
 {
 	setAPFlag();
 	String page = HTTP_BEGIN_COOP;
@@ -396,7 +421,7 @@ void doAP()
 	Alarm.delay(5000);
 }
 
-void doWiFi()
+void doWiFiHTMLPage()
 {
 	unsetAPFlag();
 	String page = HTTP_BEGIN_COOP;
@@ -409,15 +434,18 @@ void doWiFi()
 	Alarm.delay(5000);
 }
 
-void doDynDNS()
+void doDynDNSHTMLPage()
 {
 	readDynDNSfromEEPROM();
 	String page = HTTP_BEGIN_COOP;
 	page += "Please enter your no-ip info:";
 	page += HTTP_FORM_SAVE_COOP;
-	page.replace("{DYNN}", String(configuration.dyndnsname));
-	page.replace("{DYNU}", String(configuration.dyndnsuser));
-	page.replace("{DYNP}", String(configuration.dyndnspass));
+	String formFields;
+	formFields = makeHTMLEdit("Server ", "text", "dyndnsserver", String(configuration.dyndnsserver));
+	formFields += makeHTMLEdit("Name ", "text", "dyndnsname", String(configuration.dyndnsname));
+	formFields += makeHTMLEdit("Login ", "text", "dyndnsuser", String(configuration.dyndnsuser));
+	formFields += makeHTMLEdit("Password ", "password", "dyndnspass", String(configuration.dyndnspass));
+	page.replace("{FIELDS}", formFields);
 	page += HTTP_END_COOP;
 	webServer.send(200, "text/html", page);
 }
@@ -435,8 +463,7 @@ void saveDynDNStoEEPROM()
 {
 	// we write the dyndns name, login, password to eeprom
 	// position 20, 21, 22 holds the size of each string, position 23 has the first field
-	DEBUG_println("save");
-  String("dynupdate.no-ip.com").toCharArray(configuration.dyndnsserver, 50);
+	DEBUG_println("save");	
 	DEBUG_println(configuration.dyndnsname);
 	DEBUG_println(configuration.dyndnsuser);
 	DEBUG_println(configuration.dyndnspass);
@@ -493,7 +520,7 @@ void setAllAlarmsForTheDay()
 	if (isDoorOpenPeriod())
 	{
 		openDoor();
-	} 
+	}
 	else
 	{
 		closeDoor();
@@ -598,14 +625,14 @@ void lightOn()
 {
 	digitalWrite(light_relay, HIGH);
 	isLightOn = true;
-	mainPage();
+	mainHTMLPage();
 }
 
 void lightOff()
 {
 	digitalWrite(light_relay, LOW);
 	isLightOn = false;
-	mainPage();
+	mainHTMLPage();
 }
 
 void openDoor()
@@ -614,7 +641,7 @@ void openDoor()
 	showDateTime();
 	digitalWrite(door_relay, LOW);
 	isDoorOpen = true;
-	mainPage();
+	mainHTMLPage();
 }
 
 void closeDoor()
@@ -623,7 +650,7 @@ void closeDoor()
 	showDateTime();
 	digitalWrite(door_relay, HIGH);
 	isDoorOpen = false;
-	mainPage();
+	mainHTMLPage();
 }
 
 // Read TimeZone from EEPROM
@@ -714,7 +741,7 @@ boolean syncTimeWithGPSorNTP()
 	{
 		latitude = gps.location.lat();
 		longitude = gps.location.lng();
-		//		setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), gps.date.day(), gps.date.month(), gps.date.year());
+		//	setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), gps.date.day(), gps.date.month(), gps.date.year());
 		tmElements_t tm;
 		tm.Hour = gps.time.hour();
 		tm.Minute = gps.time.minute();
@@ -747,8 +774,8 @@ void setTheClock()
 
 boolean getNTPUnixTime()
 {
-	IPAddress timeServerIP; // time.nist.gov NTP server address
-
+	// time.nist.gov NTP server address
+	IPAddress timeServerIP; 
 	//get a random server from the pool
 	WiFi.hostByName(ntpServerName, timeServerIP);
 	// send an NTP packet to a time server
@@ -766,7 +793,7 @@ boolean getNTPUnixTime()
 	{
 		// We've received a packet, read the data from it
 		udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
-		//the timestamp starts at byte 40 of the received packet and is four bytes,
+	    //the timestamp starts at byte 40 of the received packet and is four bytes,
 		// or two words, long. First, esxtract the two words:
 		unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
 		unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
@@ -798,7 +825,7 @@ unsigned long sendNTPpacket(IPAddress& address)
 	packetBuffer[1] = 0;     // Stratum, or type of clock
 	packetBuffer[2] = 6;     // Polling Interval
 	packetBuffer[3] = 0xEC;  // Peer Clock Precision
-	 // 8 bytes of zero for Root Delay & Root Dispersion
+							 // 8 bytes of zero for Root Delay & Root Dispersion
 	packetBuffer[12] = 49;
 	packetBuffer[13] = 0x4E;
 	packetBuffer[14] = 49;
@@ -811,7 +838,8 @@ unsigned long sendNTPpacket(IPAddress& address)
 }
 
 
-void enableOTA()
+// this is used for programming from inside Arduino IDE
+void enableOTAfromIDE()
 {
 	// Hostname defaults to esp8266-[ChipID]
 	ArduinoOTA.setHostname("coop-esp8266");
