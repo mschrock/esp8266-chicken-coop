@@ -12,7 +12,6 @@ If you use a GPS, the coordinates will be updated automatically The coordinates 
 
 float latitude = 44.9308;
 float longitude = -123.0289;
-int timezone = -8; 
 
 with your own values. 
 
