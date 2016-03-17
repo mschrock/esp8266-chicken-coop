@@ -56,17 +56,21 @@ const String HTTP_HEAD_END_COOP = "</head><body><div style='font-family: verdana
 const String HTTP_END_COOP = "</div></body></html>";
 const String HTTP_BUTTON_COOP = "<p><form action=\"{ACT}\" method=\"get\"><button>{TXT}</button></form></p>";
 const String HTTP_LINK_CONFIG_COOP = "<p><a href=\"/RESET\" onclick=\"return confirm('Are you sure?');\">Configuration</a></p>";
+const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\"><p><input autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"text\" name=\"dyndnsname\"  value=\"{DYNN}\"</input></p><p><input autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"text\" name=\"dyndnsuser\"  value=\"{DYNU}\"</input></p><p><input autocomplete=\"off\" autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"password\" name=\"dyndnspass\"  value=\"{DYNP}\"</input></p><p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
 const String HTTP_BEGIN_COOP = HTTP_HEAD_COOP + HTTP_STYLE_COOP + HTTP_HEAD_END_COOP;
 
 const char* serverOTAIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input style=button type='file' name='update'><input style=button type='submit' value='Update'></form>";
 
 // dynamic dns
-// TO DO: store in EEPROM and ask the user to set them up
-const char* dyndnsServerName = "dynupdate.no-ip.com";
-const String DYNDNS_DOMAIN = "****.no-ip.org";
-const String DYNDNS = "http://{DYNDNSIP}/nic/update?hostname=" + DYNDNS_DOMAIN + "&myip={IP}";
-const char*  dyndnsUsername = "****@gmail.com";
-const char*  dyndnsPassword = "****";
+const String DYNDNS = "http://{DYNDNSIP}/nic/update?hostname={DYNDNSDOMAIN}&myip={IP}";
+
+struct dyndns_t
+{
+	char dyndnsserver[50] = "dynupdate.no-ip.com"; // dyndns provider domain
+	char dyndnsname[50] = ""; // dyndns personal domain
+	char dyndnsuser[50] = ""; // dyndns user name
+	char dyndnspass[50] = ""; // dyndns password
+} configuration;
 
 
 int door_relay = 2; // gpo2 - d4
@@ -159,6 +163,9 @@ const char *host = "coop";
 
 ESP8266WebServer webServer(80);
 
+template <class T> int EEPROM_writeAnything(int ee, const T& value);
+template <class T> int EEPROM_readAnything(int ee, T& value);
+
 void setup()
 {
 	pinMode(door_relay, OUTPUT);
@@ -222,9 +229,21 @@ void setup()
 	webServer.on("/RESET", resetToAPPage);
 	webServer.on("/AP", doAP);
 	webServer.on("/WIFI", doWiFi);
+	webServer.on("/DYNDNS", doDynDNS);
+	webServer.on("/SAVE", HTTP_POST, []() 
+	{
+		webServer.arg("dyndnsname").toCharArray(configuration.dyndnsname, 50);
+		webServer.arg("dyndnsuser").toCharArray(configuration.dyndnsuser, 50);
+		webServer.arg("dyndnspass").toCharArray(configuration.dyndnspass, 50);
+		saveDynDNStoEEPROM();
+		mainPage();
+	});
+
+
 
 	// web firmware update - start
-	webServer.on("/firmware", HTTP_GET, []() {
+	webServer.on("/firmware", HTTP_GET, []() 
+	{
 		webServer.sendHeader("Connection", "close");
 		webServer.sendHeader("Access-Control-Allow-Origin", "*");
 		webServer.send(200, "text/html", serverOTAIndex);
@@ -326,11 +345,6 @@ void mainPage()
 	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
 	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
 
-	webServer.on("/ACT=OPEN", openDoor);
-	webServer.on("/ACT=CLOSE", closeDoor);
-	webServer.on("/ACT=LON", lightOn);
-	webServer.on("/ACT=LOFF", lightOff);
-
 	if (isDoorOpen)
 	{
 		page += makeButton("/ACT=CLOSE", "Close door");
@@ -361,6 +375,7 @@ void resetToAPPage()
 	page += "Do you want to run as AP or<br>do you want to connect to a WiFi network?";
 	page += makeButton("/AP", "Make AP");
 	page += makeButton("/WIFI", "Connect to WiFi");
+	page += makeButton("/DYNDNS", "Dynamic DNS");
 	page += "<br>";
 	page += makeButton("/firmware", "Update firmware");
 	page += HTTP_END_COOP;
@@ -392,6 +407,41 @@ void doWiFi()
 	wifi.resetSettings();
 	ESP.reset();
 	Alarm.delay(5000);
+}
+
+void doDynDNS()
+{
+	readDynDNSfromEEPROM();
+	String page = HTTP_BEGIN_COOP;
+	page += "Please enter your no-ip info:";
+	page += HTTP_FORM_SAVE_COOP;
+	page.replace("{DYNN}", String(configuration.dyndnsname));
+	page.replace("{DYNU}", String(configuration.dyndnsuser));
+	page.replace("{DYNP}", String(configuration.dyndnspass));
+	page += HTTP_END_COOP;
+	webServer.send(200, "text/html", page);
+}
+
+void readDynDNSfromEEPROM()
+{
+	DEBUG_println("read");
+	EEPROM_readAnything(50, configuration);
+	DEBUG_println(configuration.dyndnsname);
+	DEBUG_println(configuration.dyndnsuser);
+	DEBUG_println(configuration.dyndnspass);
+}
+
+void saveDynDNStoEEPROM()
+{
+	// we write the dyndns name, login, password to eeprom
+	// position 20, 21, 22 holds the size of each string, position 23 has the first field
+	DEBUG_println("save");
+  String("dynupdate.no-ip.com").toCharArray(configuration.dyndnsserver, 50);
+	DEBUG_println(configuration.dyndnsname);
+	DEBUG_println(configuration.dyndnsuser);
+	DEBUG_println(configuration.dyndnspass);
+
+	EEPROM_writeAnything(50, configuration);
 }
 
 
@@ -576,9 +626,6 @@ void closeDoor()
 	mainPage();
 }
 
-template <class T> int EEPROM_writeAnything(int ee, const T& value);
-template <class T> int EEPROM_readAnything(int ee, T& value);
-
 // Read TimeZone from EEPROM
 int readTZ()
 {
@@ -633,18 +680,21 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 	return i;
 }
 
+
 void dynDNS()
 {
 	// put the IP on a DYNDNS for easy access
 	HTTPClient http;
 	String dyndns = DYNDNS;
 	IPAddress dyndnsServerIP;
-
-	WiFi.hostByName(dyndnsServerName, dyndnsServerIP);
+	readDynDNSfromEEPROM();
+	WiFi.hostByName(configuration.dyndnsserver, dyndnsServerIP);
 	dyndns.replace("{DYNDNSIP}", dyndnsServerIP.toString());
+	dyndns.replace("{DYNDNSDOMAIN}", String(configuration.dyndnsname));
 	dyndns.replace("{IP}", WiFi.localIP().toString());
+	DEBUG_println(dyndns);
 	http.begin(dyndns); //HTTP		
-	http.setAuthorization(dyndnsUsername, dyndnsPassword);
+	http.setAuthorization(configuration.dyndnsuser, configuration.dyndnspass);
 	int httpCode = http.GET();
 	DEBUG_println(httpCode);
 	if (httpCode == HTTP_CODE_OK)
