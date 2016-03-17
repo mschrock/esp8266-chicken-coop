@@ -20,13 +20,17 @@ At first boot, you'll have to connect to the Access Point created by the esp8266
 
 After esp8266 connects to your wifi, open in your browser the IP assigned, for the available commands.
 
-![Main Page](http://i.imgur.com/1pNtAYP.jpg)
+![Main Page](http://i.imgur.com/es0Xqiv.jpg)
 
 ## Wifi 
 
 The code allows the "coop door" to run connected to your wifi, or as stand alone in AP mode.
 
-![Wifi Mode](http://i.imgur.com/fxGEhEJ.jpg)
+![Wifi Mode](http://i.imgur.com/mbSJfk7.jpg)
+
+##DynDNS
+
+![DynDNS](http://i.imgur.com/iMRAzJt.jpg)
 
 
 
