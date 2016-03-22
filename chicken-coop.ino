@@ -49,6 +49,8 @@
 #define DEBUG_println(val)
 #endif
 
+//#define __GPS_INSTALLED__
+
 #define COOP_VERSION "7"
 
 const String HTTP_HEAD_COOP = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><title>Chicken Coop</title>";
@@ -68,10 +70,12 @@ const String DYNDNS = "http://{DYNDNSIP}/nic/update?hostname={DYNDNSDOMAIN}&myip
 
 struct dyndns_t
 {
+	boolean configured = false;
 	char dyndnsserver[50] = "dynupdate.no-ip.com"; // dyndns provider domain
-	char dyndnsname[50] = ""; // dyndns personal domain
-	char dyndnsuser[50] = ""; // dyndns user name
-	char dyndnspass[50] = ""; // dyndns password
+	char dyndnsname[50] = "yourname.no-ip.org"; // dyndns personal domain
+	char dyndnsuser[50] = "username"; // dyndns user name
+	char dyndnspass[50] = "password"; // dyndns password
+	boolean isAP = false;
 } configuration;
 
 
@@ -155,8 +159,6 @@ byte lightOffMinute;
 boolean isDoorOpen = true;
 boolean isLightOn = true;
 
-boolean isAP = false;
-
 /* Set these to your desired credentials. */
 const char *ssid = "ChickenCoop";
 const char *password = "12345678";
@@ -170,6 +172,8 @@ template <class T> int EEPROM_readAnything(int ee, T& value);
 
 void setup()
 {
+	String ip;
+
 	pinMode(door_relay, OUTPUT);
 	pinMode(light_relay, OUTPUT);
 
@@ -186,13 +190,24 @@ void setup()
 
 	// init the eeprom
 	EEPROM.begin(512);
-
-	String ip;
-	isAP = isAPFlag();
-
-	if (isAP)
+    
+	
+	// initial configuration
+	readConfigFromEEPROM();
+	if (!configuration.configured)
 	{
-		/* You can remove the password parameter if you want the AP to be open. */
+		configuration.configured = true;
+		String("dynupdate.no-ip.com").toCharArray(configuration.dyndnsserver, 50); // dyndns provider domain
+		String("yourname.no-ip.org").toCharArray(configuration.dyndnsname, 50); // dyndns personal domain
+		String("username").toCharArray(configuration.dyndnsuser, 50); // dyndns user name
+		String("password").toCharArray(configuration.dyndnspass, 50); // dyndns password
+		configuration.isAP = false;
+		saveConfigToEEPROM();
+	}
+
+	if (configuration.isAP)
+	{
+		// You can remove the password parameter if you want the AP to be open.
 		WiFi.softAP(ssid, password);
 		DEBUG_print("AP Mode, IP address: ");
 	}
@@ -239,7 +254,7 @@ void setup()
 		webServer.arg("dyndnsuser").toCharArray(configuration.dyndnsuser, 50);
 		webServer.arg("dyndnspass").toCharArray(configuration.dyndnspass, 50);
 		// save new values
-		saveDynDNStoEEPROM();
+		saveConfigToEEPROM();
 		// update DNS
 		dynDNS();
 		// server the main page
@@ -319,7 +334,7 @@ void setup()
 	Alarm.alarmRepeat(1, 30, 0, setAllAlarmsForTheDay);
 
 	// if we aren't an AP, do & schedule update with dyndns, enable OTA
-	if (!isAP)
+	if (!configuration.isAP)		
 	{
 		// allow OTA update from inside Arduino IDE
 		enableOTAfromIDE();
@@ -332,7 +347,7 @@ void setup()
 
 void loop()
 {
-	if (!isAP)
+	if (!configuration.isAP)
 	{
 		ArduinoOTA.handle();
 	}
@@ -436,7 +451,7 @@ void doWiFiHTMLPage()
 
 void doDynDNSHTMLPage()
 {
-	readDynDNSfromEEPROM();
+	readConfigFromEEPROM();
 	String page = HTTP_BEGIN_COOP;
 	page += "Please enter your no-ip info:";
 	page += HTTP_FORM_SAVE_COOP;
@@ -450,13 +465,13 @@ void doDynDNSHTMLPage()
 	webServer.send(200, "text/html", page);
 }
 
-void readDynDNSfromEEPROM()
+void readConfigFromEEPROM()
 {
 	DEBUG_println("read dyndns eeprom");
 	EEPROM_readAnything(50, configuration);
 }
 
-void saveDynDNStoEEPROM()
+void saveConfigToEEPROM()
 {
 	// we write the dyndns name, login, password to eeprom
 	// position 20, 21, 22 holds the size of each string, position 23 has the first field
@@ -649,19 +664,14 @@ void closeDoor()
 
 void setAPFlag()
 {
-	EEPROM_writeAnything(20, true);
+	configuration.isAP = true;
+	saveConfigToEEPROM();
 }
 
 void unsetAPFlag()
 {
-	EEPROM_writeAnything(20, false);
-}
-
-boolean isAPFlag()
-{
-	boolean ap;
-	EEPROM_readAnything(20, ap);
-	return ap;
+	configuration.isAP = false;
+	saveConfigToEEPROM();
 }
 
 template <class T> int EEPROM_writeAnything(int ee, const T& value)
@@ -690,7 +700,7 @@ void dynDNS()
 	HTTPClient http;
 	String dyndns = DYNDNS;
 	IPAddress dyndnsServerIP;
-	readDynDNSfromEEPROM();
+	readConfigFromEEPROM();
 	WiFi.hostByName(configuration.dyndnsserver, dyndnsServerIP);
 	dyndns.replace("{DYNDNSIP}", dyndnsServerIP.toString());
 	dyndns.replace("{DYNDNSDOMAIN}", String(configuration.dyndnsname));
@@ -729,7 +739,7 @@ boolean syncTimeWithGPSorNTP()
 		showDateTime();
 		return true;
 	}
-	else if (!isAPFlag())
+	else if (!configuration.isAP)
 	{
 		return getNTPUnixTime();
 	}
