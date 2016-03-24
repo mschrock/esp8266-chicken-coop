@@ -62,7 +62,7 @@ const String HTTP_LINK_CONFIG_COOP = "<p><a href=\"/RESET\" onclick=\"return con
 const String HTTP_EDIT_COOP = "<p><label for=\"{ENAME}\">{LABEL}</label><input autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"{ETYPE}\" name=\"{ENAME}\" value=\"{EVALUE}\"</input></p>";
 const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\">{FIELDS}<p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
 const String HTTP_BEGIN_COOP = HTTP_HEAD_COOP + HTTP_STYLE_COOP + HTTP_HEAD_END_COOP;
-
+const String HTTP_CAMERA = "<p><IMG SRC=\"http://user:password@cam.address.com:8888/axis-cgi/jpg/image.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
 const char* serverOTAIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input style=button type='file' name='update'><input style=button type='submit' value='Update'></form>";
 
 // dynamic dns
@@ -401,7 +401,7 @@ void mainHTMLPage()
 	{
 		page += makeHTMLButton("/ACT=LON", "Light on");
 	}
-
+	page += HTTP_CAMERA;
 	page += HTTP_LINK_CONFIG_COOP;
 	// bottom of the html page
 	page += HTTP_END_COOP;
