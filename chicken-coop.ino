@@ -51,9 +51,8 @@
 
 //#define __GPS_INSTALLED__
 
-#define COOP_VERSION "7"
-
-const String HTTP_HEAD_COOP = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><title>Chicken Coop</title>";
+const String HTTP_HEAD_EXPIRE = "<meta http - equiv = \"cache-control\" content=\"max-age=0\" /><meta http-equiv=\"cache-control\" content=\"no-cache\" /><meta http-equiv=\"expires\" content=\"0\" /><meta http-equiv=\"expires\" content=\"Tue, 01 Jan 1980 1:00:00 GMT\" /><meta http-equiv=\"pragma\" content=\"no-cache\" />";
+const String HTTP_HEAD_COOP = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>" + HTTP_HEAD_EXPIRE + "<title>Chicken Coop</title>";
 const String HTTP_STYLE_COOP = "<style>div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} input[type=\"submit\"]{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;}</style>";
 const String HTTP_HEAD_END_COOP = "</head><body><div style='font-family: verdana; text-align: left; display: inline-block;'><h1>Chicken Coop</h1>";
 const String HTTP_END_COOP = "</div></body></html>";
@@ -62,15 +61,17 @@ const String HTTP_LINK_CONFIG_COOP = "<p><a href=\"/RESET\" onclick=\"return con
 const String HTTP_EDIT_COOP = "<p><label for=\"{ENAME}\">{LABEL}</label><input autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"{ETYPE}\" name=\"{ENAME}\" value=\"{EVALUE}\"</input></p>";
 const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\">{FIELDS}<p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
 const String HTTP_BEGIN_COOP = HTTP_HEAD_COOP + HTTP_STYLE_COOP + HTTP_HEAD_END_COOP;
-const String HTTP_CAMERA = "<p><IMG SRC=\"http://user:password@cam.address.com:8888/axis-cgi/jpg/image.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
+const String HTTP_CAMERA = "<p><IMG SRC=\"http://192.168.1.61/axis-cgi/jpg/image.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
 const char* serverOTAIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input style=button type='file' name='update'><input style=button type='submit' value='Update'></form>";
 
 // dynamic dns
 const String DYNDNS = "http://{DYNDNSIP}/nic/update?hostname={DYNDNSDOMAIN}&myip={IP}";
 
+#define COOP_VERSION "V9"
+
 struct dyndns_t
 {
-	boolean configured = false;
+	char configured[4] = COOP_VERSION;
 	char dyndnsserver[50] = "dynupdate.no-ip.com"; // dyndns provider domain
 	char dyndnsname[50] = "yourname.no-ip.org"; // dyndns personal domain
 	char dyndnsuser[50] = "username"; // dyndns user name
@@ -101,7 +102,7 @@ const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of th
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 
-									// A UDP instance to let us send and receive packets over UDP
+// A UDP instance to let us send and receive packets over UDP
 WiFiUDP udp;
 
 //Australia Eastern Time Zone (Sydney, Melbourne)
@@ -159,7 +160,7 @@ byte lightOffMinute;
 boolean isDoorOpen = true;
 boolean isLightOn = true;
 
-/* Set these to your desired credentials. */
+// Set these to your desired credentials. 
 const char *ssid = "ChickenCoop";
 const char *password = "12345678";
 const char *host = "coop";
@@ -185,7 +186,7 @@ void setup()
 
 	// init serial for debugging
 	DEBUG_begin(115200);
-	DEBUG_print("Chicken Coop v");
+	DEBUG_print("Chicken Coop ");
 	DEBUG_println(COOP_VERSION);
 
 	// init the eeprom
@@ -194,9 +195,9 @@ void setup()
 	
 	// initial configuration
 	readConfigFromEEPROM();
-	if (!configuration.configured)
+	if (!(String(configuration.configured) == String(COOP_VERSION)))
 	{
-		configuration.configured = true;
+		String(COOP_VERSION).toCharArray(configuration.configured, 4);
 		String("dynupdate.no-ip.com").toCharArray(configuration.dyndnsserver, 50); // dyndns provider domain
 		String("yourname.no-ip.org").toCharArray(configuration.dyndnsname, 50); // dyndns personal domain
 		String("username").toCharArray(configuration.dyndnsuser, 50); // dyndns user name
