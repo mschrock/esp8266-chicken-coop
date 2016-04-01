@@ -61,7 +61,8 @@ const String HTTP_LINK_CONFIG_COOP = "<p><a href=\"/RESET\" onclick=\"return con
 const String HTTP_EDIT_COOP = "<p><label for=\"{ENAME}\">{LABEL}</label><input autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"{ETYPE}\" name=\"{ENAME}\" value=\"{EVALUE}\"</input></p>";
 const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\">{FIELDS}<p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
 const String HTTP_BEGIN_COOP = HTTP_HEAD_COOP + HTTP_STYLE_COOP + HTTP_HEAD_END_COOP;
-const String HTTP_CAMERA = "<p><IMG SRC=\"http://192.168.1.61/axis-cgi/jpg/image.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
+//const String HTTP_CAMERA = "<p><IMG SRC=\"http://192.168.1.61/axis-cgi/jpg/image.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
+const String HTTP_CAMERA = "<p><IMG SRC=\"http://192.168.1.61/axis-cgi/mjpg/video.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
 const char* serverOTAIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input style=button type='file' name='update'><input style=button type='submit' value='Update'></form>";
 
 // dynamic dns
@@ -71,7 +72,7 @@ const String DYNDNS = "http://{DYNDNSIP}/nic/update?hostname={DYNDNSDOMAIN}&myip
 
 struct dyndns_t
 {
-	char configured[4] = COOP_VERSION;
+	char configured[10] = COOP_VERSION;
 	char dyndnsserver[50] = "dynupdate.no-ip.com"; // dyndns provider domain
 	char dyndnsname[50] = "yourname.no-ip.org"; // dyndns personal domain
 	char dyndnsuser[50] = "username"; // dyndns user name
@@ -197,7 +198,7 @@ void setup()
 	readConfigFromEEPROM();
 	if (!(String(configuration.configured) == String(COOP_VERSION)))
 	{
-		String(COOP_VERSION).toCharArray(configuration.configured, 4);
+		String(COOP_VERSION).toCharArray(configuration.configured, 10);
 		String("dynupdate.no-ip.com").toCharArray(configuration.dyndnsserver, 50); // dyndns provider domain
 		String("yourname.no-ip.org").toCharArray(configuration.dyndnsname, 50); // dyndns personal domain
 		String("username").toCharArray(configuration.dyndnsuser, 50); // dyndns user name
