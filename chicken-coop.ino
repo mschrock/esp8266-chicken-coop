@@ -35,6 +35,14 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 
+// to enable nokia5510 LCD screen  uncomment following line
+//#define __LCD_SCREEN__  
+
+// to enable deep sleep uncomment the following line
+//#define __SLEEP_MODE__  
+
+// if you want to get time from a GPS, uncomment following line
+//#define __GPS_INSTALLED__  
 
 // we don't need to send message to serial if not connected to a computer. Comment the following line if not debuging
 #define __DEBUG__
@@ -49,7 +57,8 @@
 #define DEBUG_println(val)
 #endif
 
-//#define __GPS_INSTALLED__
+
+
 
 const String HTTP_HEAD_EXPIRE = "<meta http - equiv = \"cache-control\" content=\"max-age=0\" /><meta http-equiv=\"cache-control\" content=\"no-cache\" /><meta http-equiv=\"expires\" content=\"0\" /><meta http-equiv=\"expires\" content=\"Tue, 01 Jan 1980 1:00:00 GMT\" /><meta http-equiv=\"pragma\" content=\"no-cache\" />";
 const String HTTP_HEAD_COOP = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>" + HTTP_HEAD_EXPIRE + "<title>Chicken Coop</title>";
@@ -81,13 +90,15 @@ struct dyndns_t
 } configuration;
 
 
-int door_relay = 2; // gpo2 - d4
-int light_relay = 14; // gop14 - d5
+int door_relay1 = 4; // gpo4 - d2
+int door_relay2 = 14; // gpo14 - d5
+int light_relay = 12; // gpo12 - d6
 
 					  // what is our longitude (west values negative) and latitude (south values negative)
 float latitude = 44.9308; // if you use a GPS to sync time, the value is going to be replaced by the GPS 
 float longitude = -123.0289;
 
+#if defined (__GPS_INSTALLED__)
 // we will syncronize the time with an GPS connected tot pin gpo13 -> gps TX, gpo15 -> gpx RX
 static const int RXPin = 13; // gpo13 - d7
 static const int TXPin = 15; // gpo15 - d8
@@ -96,6 +107,7 @@ static const uint32_t GPSBaud = 38400;
 
 SoftwareSerial SerialGPS = SoftwareSerial(RXPin, TXPin);
 TinyGPSPlus gps;
+#endif
 
 // using NTP to retrieve the local time
 const char* ntpServerName = "time.nist.gov";
@@ -174,16 +186,31 @@ template <class T> int EEPROM_readAnything(int ee, T& value);
 
 void setup()
 {
+
+#if defined (__LCD_SCREEN__)  
+  //Init the LCD  
+  LCDInit(); 
+  LCDClear();  
+  gotoXY(0, 2);
+  LCDString("Chicken Coop ");  
+#endif
+  
 	String ip;
 
-	pinMode(door_relay, OUTPUT);
+	pinMode(door_relay1, OUTPUT);
+  pinMode(door_relay2, OUTPUT);
+
 	pinMode(light_relay, OUTPUT);
 
-	digitalWrite(door_relay, LOW);
+	digitalWrite(door_relay1, LOW);
+  digitalWrite(door_relay2, LOW);
+  
 	digitalWrite(light_relay, HIGH);
-
+  
+#if defined (__GPS_INSTALLED__)
 	// init serial for time sync with the GPS
 	SerialGPS.begin(GPSBaud);
+#endif
 
 	// init serial for debugging
 	DEBUG_begin(115200);
@@ -224,7 +251,7 @@ void setup()
 			DEBUG_println("failed to connect and hit timeout");
 			//reset and try again, or maybe put it to deep sleep
 			ESP.reset();
-			Alarm.delay(1000);
+			delay(1000);
 		}
 		while (WiFi.waitForConnectResult() != WL_CONNECTED)
 		{
@@ -236,7 +263,14 @@ void setup()
 		DEBUG_print("WiFi Mode, IP address: ");
 	}
 
-	DEBUG_println(WiFi.localIP());
+  DEBUG_println(WiFi.localIP());  
+
+#if defined (__LCD_SCREEN__)  
+  LCDClear();  
+  gotoXY(0, 2);
+  LCDString(WiFi.localIP().toString());
+#endif
+
 	MDNS.begin(host);
 
 	// Match the request for the web server
@@ -355,6 +389,23 @@ void loop()
 	}
 	webServer.handleClient();
 	Alarm.delay(0);
+#if defined (__SLEEP_MODE__)   
+  // if we are in period that nothing happens, put the esp to deep sleep to save some power
+  // GPIO16 needs to be tied to RST to wake from deepSleep. To be able to upload new firmware, disconnect the two  
+  // sleep between 1AM and 4AM and 9AM and 3PM
+  if (inTimePeriod(now(), 1, 0, 4, 0) || inTimePeriod(now(), 9, 0, 15, 0))
+  {
+#if defined (__LCD_SCREEN__)    
+    LCDClear();  
+    gotoXY(0, 2);
+    LCDString("Sleeping..."); 
+#endif    
+    DEBUG_println("Sleep... ");   
+    // deepSleep time is defined in microseconds. Multiply seconds by 1e6 
+    int sleepTimeS = 30 * 60; //sleep 30 min at a time
+    ESP.deepSleep(sleepTimeS * 1000000);
+  }
+#endif  
 }
 
 String makeHTMLButton(String action, String text)
@@ -510,7 +561,7 @@ boolean inTimePeriod(time_t val, byte startHour, byte startMinute, byte endHour,
 	tm.Minute = endMinute;
 	endtm = makeTime(tm);
 
-	return (val >= starttm) && (now() <= endtm);
+	return (val >= starttm) && (val <= endtm);
 }
 boolean isDoorOpenPeriod()
 {
@@ -649,7 +700,9 @@ void openDoor()
 {
 	DEBUG_println("Opening door...");
 	showDateTime();
-	digitalWrite(door_relay, LOW);
+  digitalWrite(door_relay1, HIGH);
+  Alarm.delay(100);
+  digitalWrite(door_relay1, LOW);
 	isDoorOpen = true;
 	mainHTMLPage();
 }
@@ -658,7 +711,9 @@ void closeDoor()
 {
 	DEBUG_println("Closing door...");
 	showDateTime();
-	digitalWrite(door_relay, HIGH);
+  digitalWrite(door_relay2, HIGH);
+  Alarm.delay(100);
+  digitalWrite(door_relay2, LOW);
 	isDoorOpen = false;
 	mainHTMLPage();
 }
@@ -720,8 +775,10 @@ void dynDNS()
 }
 
 boolean syncTimeWithGPSorNTP()
-{
-	// Dispatch incoming characters
+{	
+#if defined (__GPS_INSTALLED__) 
+  DEBUG_println("Please wait, syncing the clock with GPS...");
+  // Dispatch incoming characters
 	while (SerialGPS.available() > 0)
 		gps.encode(SerialGPS.read());
 
@@ -741,7 +798,9 @@ boolean syncTimeWithGPSorNTP()
 		showDateTime();
 		return true;
 	}
-	else if (!configuration.isAP)
+	else 
+#endif
+	if (!configuration.isAP)
 	{
 		return getNTPUnixTime();
 	}
@@ -753,7 +812,6 @@ boolean syncTimeWithGPSorNTP()
 
 void setTheClock()
 {
-	DEBUG_println("Please wait, syncing the clock with GPS...");
 	while (!syncTimeWithGPSorNTP())
 	{
 		delay(10);
