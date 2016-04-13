@@ -396,10 +396,12 @@ void mainHTMLPage()
 	String page = HTTP_BEGIN_COOP;
 
 	page += "The time is: " + String(hour()) + ":" + String(niceMinuteSecond(minute())) + ", " + String(month()) + "/" + String(day()) + "/" + String(year()) + "<br>";
+	page += "The door is now: <b>" + (isDoorOpen ? String("OPEN") : String("CLOSED")) + "</b><br>";
 	page += "Door opening time: " + String(doorOpeningHour) + ":" + String(niceMinuteSecond(doorOpeningMinute)) + "<br>";
 	page += "Door closing time: " + String(doorClosingHour) + ":" + String(niceMinuteSecond(doorClosingMinute)) + "<br>";
-	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
-	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
+//	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
+//	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
+	page += "Temperature: " + String(rtc_getTemp()) + " &deg;C, " + String(rtc_getTemp() * 1.8 + 32) + " &deg;F" +"<br>";
 
 	if (isDoorOpen)
 	{
@@ -409,7 +411,7 @@ void mainHTMLPage()
 	{
 		page += makeHTMLButton("/ACT=OPEN", "Open door");
 	}
-
+/*
 	if (isLightOn)
 	{
 		page += makeHTMLButton("/ACT=LOFF", "Light off");
@@ -418,6 +420,7 @@ void mainHTMLPage()
 	{
 		page += makeHTMLButton("/ACT=LON", "Light on");
 	}
+*/
 	page += HTTP_CAMERA;
 	page += HTTP_LINK_CONFIG_COOP;
 	// bottom of the html page
