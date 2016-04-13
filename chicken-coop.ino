@@ -23,8 +23,6 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266mDNS.h>
-#include <TinyGPS++.h>            //https://github.com/mikalhart/TinyGPSPlus
-#include <SoftwareSerial.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
 #include <TimeLord.h>             //https://github.com/probonopd/TimeLord
 #include <TimeLib.h>              //https://github.com/PaulStoffregen/Time
@@ -34,15 +32,18 @@
 #include <Arduino.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-
-// to enable nokia5510 LCD screen  uncomment following line
-//#define __LCD_SCREEN__  
+#include <Wire.h>
 
 // to enable deep sleep uncomment the following line
 //#define __SLEEP_MODE__  
 
 // if you want to get time from a GPS, uncomment following line
 //#define __GPS_INSTALLED__  
+
+// if you want to use LCD
+//#define __LCD_INSTALLED__
+
+#define __RTC_INSTALLED__
 
 // we don't need to send message to serial if not connected to a computer. Comment the following line if not debuging
 #define __DEBUG__
@@ -58,8 +59,6 @@
 #endif
 
 
-
-
 const String HTTP_HEAD_EXPIRE = "<meta http - equiv = \"cache-control\" content=\"max-age=0\" /><meta http-equiv=\"cache-control\" content=\"no-cache\" /><meta http-equiv=\"expires\" content=\"0\" /><meta http-equiv=\"expires\" content=\"Tue, 01 Jan 1980 1:00:00 GMT\" /><meta http-equiv=\"pragma\" content=\"no-cache\" />";
 const String HTTP_HEAD_COOP = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>" + HTTP_HEAD_EXPIRE + "<title>Chicken Coop</title>";
 const String HTTP_STYLE_COOP = "<style>div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} input[type=\"submit\"]{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;}</style>";
@@ -70,7 +69,6 @@ const String HTTP_LINK_CONFIG_COOP = "<p><a href=\"/RESET\" onclick=\"return con
 const String HTTP_EDIT_COOP = "<p><label for=\"{ENAME}\">{LABEL}</label><input autocorrect=\"off\" autocapitalize=\"off\" spellcheck=\"false\" type=\"{ETYPE}\" name=\"{ENAME}\" value=\"{EVALUE}\"</input></p>";
 const String HTTP_FORM_SAVE_COOP = "<p><form action=\"/SAVE\" method=\"post\">{FIELDS}<p><input style=button type=\"submit\" value=\"Save settings\"></p></form></p>";
 const String HTTP_BEGIN_COOP = HTTP_HEAD_COOP + HTTP_STYLE_COOP + HTTP_HEAD_END_COOP;
-//const String HTTP_CAMERA = "<p><IMG SRC=\"http://192.168.1.61/axis-cgi/jpg/image.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
 const String HTTP_CAMERA = "<p><IMG SRC=\"http://192.168.1.61/axis-cgi/mjpg/video.cgi?resolution=352x240\" ALT=\"Live Image\"><p>";
 const char* serverOTAIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input style=button type='file' name='update'><input style=button type='submit' value='Update'></form>";
 
@@ -90,33 +88,12 @@ struct dyndns_t
 } configuration;
 
 
-int door_relay1 = 4; // gpo4 - d2
+int door_relay1 = 12; // gpo4 - d2
 int door_relay2 = 14; // gpo14 - d5
-int light_relay = 12; // gpo12 - d6
 
-					  // what is our longitude (west values negative) and latitude (south values negative)
+// what is our longitude (west values negative) and latitude (south values negative)
 float latitude = 44.9308; // if you use a GPS to sync time, the value is going to be replaced by the GPS 
 float longitude = -123.0289;
-
-#if defined (__GPS_INSTALLED__)
-// we will syncronize the time with an GPS connected tot pin gpo13 -> gps TX, gpo15 -> gpx RX
-static const int RXPin = 13; // gpo13 - d7
-static const int TXPin = 15; // gpo15 - d8
-							 // change the speed to match your GPS 
-static const uint32_t GPSBaud = 38400;
-
-SoftwareSerial SerialGPS = SoftwareSerial(RXPin, TXPin);
-TinyGPSPlus gps;
-#endif
-
-// using NTP to retrieve the local time
-const char* ntpServerName = "time.nist.gov";
-const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
-byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
-unsigned int localPort = 2390;      // local port to listen for UDP packets
-
-// A UDP instance to let us send and receive packets over UDP
-WiFiUDP udp;
 
 //Australia Eastern Time Zone (Sydney, Melbourne)
 TimeChangeRule aEDT = { "AEDT", First, Sun, Oct, 2, 660 };    //UTC + 11 hours
@@ -187,29 +164,20 @@ template <class T> int EEPROM_readAnything(int ee, T& value);
 void setup()
 {
 
-#if defined (__LCD_SCREEN__)  
-  //Init the LCD  
-  LCDInit(); 
-  LCDClear();  
-  gotoXY(0, 2);
-  LCDString("Chicken Coop ");  
-#endif
-  
+	Wire.begin();
+
 	String ip;
 
 	pinMode(door_relay1, OUTPUT);
-  pinMode(door_relay2, OUTPUT);
-
-	pinMode(light_relay, OUTPUT);
+	pinMode(door_relay2, OUTPUT);
 
 	digitalWrite(door_relay1, LOW);
-  digitalWrite(door_relay2, LOW);
-  
-	digitalWrite(light_relay, HIGH);
-  
+	digitalWrite(door_relay2, LOW);
+
 #if defined (__GPS_INSTALLED__)
 	// init serial for time sync with the GPS
-	SerialGPS.begin(GPSBaud);
+	initGPS();
+
 #endif
 
 	// init serial for debugging
@@ -219,8 +187,8 @@ void setup()
 
 	// init the eeprom
 	EEPROM.begin(512);
-    
-	
+
+
 	// initial configuration
 	readConfigFromEEPROM();
 	if (!(String(configuration.configured) == String(COOP_VERSION)))
@@ -263,13 +231,7 @@ void setup()
 		DEBUG_print("WiFi Mode, IP address: ");
 	}
 
-  DEBUG_println(WiFi.localIP());  
-
-#if defined (__LCD_SCREEN__)  
-  LCDClear();  
-  gotoXY(0, 2);
-  LCDString(WiFi.localIP().toString());
-#endif
+	DEBUG_println(WiFi.localIP());
 
 	MDNS.begin(host);
 
@@ -355,23 +317,30 @@ void setup()
 	DEBUG_print(host);
 	DEBUG_println(".local in your browser");
 
-	// Starting UDP
-	udp.begin(localPort);
+#if defined (__RTC_INSTALLED__)
+	setSyncProvider(rtc_get);   // the function to get the time from the RTC
 
-	// wait for GPS fix and then set the date/time
-	setTheClock();
+	if (timeStatus() != timeSet)
+		Serial.println("Unable to sync with the RTC");
+	else
+		Serial.println("RTC has set the system time");
+#endif
 
 	// create the alarms 
+	// every 5 min, check if the door is in the right position
+	Alarm.timerRepeat((5 * 60), handleDoorAndLight);
 	// schedule alarms for today, do it once now
 	Alarm.timerOnce(5, setAllAlarmsForTheDay);
-	// every hour, sync the clock
-	Alarm.timerRepeat(60 * 60, setTheClock);
 	// recalculate times and schedule alarms for the day. Do it around middle of the night
-	Alarm.alarmRepeat(1, 30, 0, setAllAlarmsForTheDay);
+	Alarm.alarmRepeat(1, 0, 0, setAllAlarmsForTheDay);
 
 	// if we aren't an AP, do & schedule update with dyndns, enable OTA
-	if (!configuration.isAP)		
-	{
+	if (!configuration.isAP)
+	{		
+		// if connected to the internet, sync the RTC and local clock with NTP
+		initNTP();
+		setTheClock();
+
 		// allow OTA update from inside Arduino IDE
 		enableOTAfromIDE();
 		// Update IP on Dynamic DNS
@@ -390,21 +359,16 @@ void loop()
 	webServer.handleClient();
 	Alarm.delay(0);
 #if defined (__SLEEP_MODE__)   
-  // if we are in period that nothing happens, put the esp to deep sleep to save some power
-  // GPIO16 needs to be tied to RST to wake from deepSleep. To be able to upload new firmware, disconnect the two  
-  // sleep between 1AM and 4AM and 9AM and 3PM
-  if (inTimePeriod(now(), 1, 0, 4, 0) || inTimePeriod(now(), 9, 0, 15, 0))
-  {
-#if defined (__LCD_SCREEN__)    
-    LCDClear();  
-    gotoXY(0, 2);
-    LCDString("Sleeping..."); 
-#endif    
-    DEBUG_println("Sleep... ");   
-    // deepSleep time is defined in microseconds. Multiply seconds by 1e6 
-    int sleepTimeS = 30 * 60; //sleep 30 min at a time
-    ESP.deepSleep(sleepTimeS * 1000000);
-  }
+	// if we are in period that nothing happens, put the esp to deep sleep to save some power
+	// GPIO16 needs to be tied to RST to wake from deepSleep. To be able to upload new firmware, disconnect the two  
+	// sleep between 1:15AM and 4AM and 9AM and 3PM
+	if (inTimePeriod(now(), 1, 15, 4, 0) || inTimePeriod(now(), 9, 0, 15, 0))
+	{
+		DEBUG_println("Sleep... ");
+		// deepSleep time is defined in microseconds. Multiply seconds by 1e6 
+		int sleepTimeS = 30 * 60; //sleep 30 min at a time
+		ESP.deepSleep(sleepTimeS * 1000000);
+	}
 #endif  
 }
 
@@ -528,7 +492,7 @@ void saveConfigToEEPROM()
 {
 	// we write the dyndns name, login, password to eeprom
 	// position 20, 21, 22 holds the size of each string, position 23 has the first field
-	DEBUG_println("save dyndns eeprom");	
+	DEBUG_println("save dyndns eeprom");
 	EEPROM_writeAnything(50, configuration);
 }
 
@@ -573,7 +537,7 @@ boolean isLightONPeriod()
 	return inTimePeriod(now(), ligthOnHour, ligthOnMinute, lightOffHour, lightOffMinute);
 }
 
-void setAllAlarmsForTheDay()
+void handleDoorAndLight()
 {
 	calculateTodaysSunriseSunset();
 
@@ -596,6 +560,11 @@ void setAllAlarmsForTheDay()
 	{
 		lightOff();
 	}
+}
+
+void setAllAlarmsForTheDay()
+{
+	handleDoorAndLight();
 
 	// open the door in the morning
 	showATime(doorOpeningHour, doorOpeningMinute);
@@ -684,14 +653,12 @@ String niceMinuteSecond(int m)
 
 void lightOn()
 {
-	digitalWrite(light_relay, HIGH);
 	isLightOn = true;
 	mainHTMLPage();
 }
 
 void lightOff()
 {
-	digitalWrite(light_relay, LOW);
 	isLightOn = false;
 	mainHTMLPage();
 }
@@ -700,9 +667,9 @@ void openDoor()
 {
 	DEBUG_println("Opening door...");
 	showDateTime();
-  digitalWrite(door_relay1, HIGH);
-  Alarm.delay(100);
-  digitalWrite(door_relay1, LOW);
+	digitalWrite(door_relay1, HIGH);
+	Alarm.delay(100);
+	digitalWrite(door_relay1, LOW);
 	isDoorOpen = true;
 	mainHTMLPage();
 }
@@ -711,9 +678,9 @@ void closeDoor()
 {
 	DEBUG_println("Closing door...");
 	showDateTime();
-  digitalWrite(door_relay2, HIGH);
-  Alarm.delay(100);
-  digitalWrite(door_relay2, LOW);
+	digitalWrite(door_relay2, HIGH);
+	Alarm.delay(100);
+	digitalWrite(door_relay2, LOW);
 	isDoorOpen = false;
 	mainHTMLPage();
 }
@@ -775,39 +742,22 @@ void dynDNS()
 }
 
 boolean syncTimeWithGPSorNTP()
-{	
+{
 #if defined (__GPS_INSTALLED__) 
-  DEBUG_println("Please wait, syncing the clock with GPS...");
-  // Dispatch incoming characters
-	while (SerialGPS.available() > 0)
-		gps.encode(SerialGPS.read());
-
-	if (gps.date.isUpdated() && gps.time.isUpdated() && gps.location.isUpdated() && gps.location.isValid())
+	if (getGPSUnixTime())
 	{
-		latitude = gps.location.lat();
-		longitude = gps.location.lng();
-		//	setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), gps.date.day(), gps.date.month(), gps.date.year());
-		tmElements_t tm;
-		tm.Hour = gps.time.hour();
-		tm.Minute = gps.time.minute();
-		tm.Second = gps.time.second();
-		tm.Day = gps.date.day();
-		tm.Month = gps.date.month();
-		tm.Year = gps.date.year();
-		setTime(myTZ.toLocal(makeTime(tm)));
-		showDateTime();
 		return true;
 	}
-	else 
-#endif
-	if (!configuration.isAP)
-	{
-		return getNTPUnixTime();
-	}
 	else
-	{
-		return false;
-	}
+#endif
+		if (!configuration.isAP)
+		{
+			return getNTPUnixTime();
+		}
+		else
+		{
+			return false;
+		}
 }
 
 void setTheClock()
@@ -816,71 +766,6 @@ void setTheClock()
 	{
 		delay(10);
 	}
-}
-
-boolean getNTPUnixTime()
-{
-	// time.nist.gov NTP server address
-	IPAddress timeServerIP; 
-	//get a random server from the pool
-	WiFi.hostByName(ntpServerName, timeServerIP);
-	// send an NTP packet to a time server
-	sendNTPpacket(timeServerIP);
-	// wait to see if a reply is available							 
-	delay(1000);
-
-	int cb = udp.parsePacket();
-	if (!cb)
-	{
-		DEBUG_println("no packet yet");
-		return false;
-	}
-	else
-	{
-		// We've received a packet, read the data from it
-		udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
-	    //the timestamp starts at byte 40 of the received packet and is four bytes,
-		// or two words, long. First, extract the two words:
-		unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-		unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-		// combine the four bytes (two words) into a long integer
-		// this is NTP time (seconds since Jan 1 1900):
-		unsigned long secsSince1900 = highWord << 16 | lowWord;
-		// now convert NTP time into everyday time:
-		// Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-		const unsigned long seventyYears = 2208988800UL;
-		// subtract seventy years:
-		unsigned long epoch = secsSince1900 - seventyYears;
-		//setTime(epoch);
-		setTime(myTZ.toLocal(epoch));
-		DEBUG_print("Local date/time: ");
-		showDateTime();
-		return true;
-	}
-}
-
-// send an NTP request to the time server at the given address
-unsigned long sendNTPpacket(IPAddress& address)
-{
-	Serial.println("Please wait, syncing the clock with NTP...");
-	// set all bytes in the buffer to 0
-	memset(packetBuffer, 0, NTP_PACKET_SIZE);
-	// Initialize values needed to form NTP request
-	// (see URL above for details on the packets)
-	packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-	packetBuffer[1] = 0;     // Stratum, or type of clock
-	packetBuffer[2] = 6;     // Polling Interval
-	packetBuffer[3] = 0xEC;  // Peer Clock Precision
-							 // 8 bytes of zero for Root Delay & Root Dispersion
-	packetBuffer[12] = 49;
-	packetBuffer[13] = 0x4E;
-	packetBuffer[14] = 49;
-	packetBuffer[15] = 52;
-	// all NTP fields have been given values, now
-	// you can send a packet requesting a timestamp:
-	udp.beginPacket(address, 123); //NTP requests are to port 123
-	udp.write(packetBuffer, NTP_PACKET_SIZE);
-	udp.endPacket();
 }
 
 
@@ -911,3 +796,4 @@ void enableOTAfromIDE()
 	});
 	ArduinoOTA.begin();
 }
+

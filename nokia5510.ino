@@ -3,6 +3,14 @@
 * https://gist.github.com/kotfarepra/2a7e009de3e640b4ea45
 */
 
+//usage
+//Init the LCD  
+//LCDInit();
+//LCDClear();
+//gotoXY(0, 2);
+//LCDString("Chicken Coop ");
+
+#if defined (__LCD_INSTALLED__)
 
 #define PIN_SCE   12 //pin GPIO12 ON ESP , pin SCE ON LCD
 #define PIN_RESET 2 //pin GPI02 on ESP , pin RST on LCD
@@ -221,3 +229,5 @@ void LCDInit(void)
   LCDWrite(LCD_COMMAND, 0x20); //We must send 0x20 before modifying the display control mode
   LCDWrite(LCD_COMMAND, 0x0C); //Set display control, normal mode. 0x0D for inverse
 }
+
+#endif
