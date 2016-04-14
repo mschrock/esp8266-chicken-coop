@@ -22,7 +22,7 @@
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
-#include <ESP8266mDNS.h>
+#include <DNSServer.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager
 #include <TimeLord.h>             //https://github.com/probonopd/TimeLord
 #include <TimeLib.h>              //https://github.com/PaulStoffregen/Time
@@ -155,7 +155,9 @@ const char *ssid = "ChickenCoop";
 const char *password = "12345678";
 const char *host = "coop";
 
-
+const byte DNS_PORT = 53;
+IPAddress apIP(192, 168, 4, 1);
+DNSServer dnsServer;
 ESP8266WebServer webServer(80);
 
 template <class T> int EEPROM_writeAnything(int ee, const T& value);
@@ -204,9 +206,19 @@ void setup()
 
 	if (configuration.isAP)
 	{
-		// You can remove the password parameter if you want the AP to be open.
+
+		WiFi.mode(WIFI_AP);
+		WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 		WiFi.softAP(ssid, password);
+
+		// if DNSServer is started with "*" for domain name, it will reply with
+		// provided IP to all DNS request
+		dnsServer.start(DNS_PORT, "*", apIP);
+
+		// You can remove the password parameter if you want the AP to be open.
+		
 		DEBUG_print("AP Mode, IP address: ");
+		DEBUG_println(apIP);
 	}
 	else
 	{
@@ -229,13 +241,12 @@ void setup()
 		}
 		//if you get here you have connected to the WiFi
 		DEBUG_print("WiFi Mode, IP address: ");
+		DEBUG_println(WiFi.localIP());
 	}
-
-	DEBUG_println(WiFi.localIP());
-
-	MDNS.begin(host);
+	
 
 	// Match the request for the web server
+	webServer.onNotFound(mainHTMLPage);
 	webServer.on("/", mainHTMLPage);
 	webServer.on("/ACT=OPEN", openDoor);
 	webServer.on("/ACT=CLOSE", closeDoor);
@@ -311,11 +322,6 @@ void setup()
 
 	// Start the web server
 	webServer.begin();
-	MDNS.addService("http", "tcp", 80);
-
-	DEBUG_print("Ready! Open http://");
-	DEBUG_print(host);
-	DEBUG_println(".local in your browser");
 
 #if defined (__RTC_INSTALLED__)
 	setSyncProvider(rtc_get);   // the function to get the time from the RTC
@@ -356,6 +362,7 @@ void loop()
 	{
 		ArduinoOTA.handle();
 	}
+	dnsServer.processNextRequest();
 	webServer.handleClient();
 	Alarm.delay(0);
 #if defined (__SLEEP_MODE__)   
