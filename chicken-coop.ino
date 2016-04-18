@@ -35,7 +35,7 @@
 #include <Wire.h>
 
 // to enable deep sleep uncomment the following line
-//#define __SLEEP_MODE__  
+#define __SLEEP_MODE__  
 
 // if you want to get time from a GPS, uncomment following line
 //#define __GPS_INSTALLED__  
@@ -43,7 +43,7 @@
 // if you want to use LCD
 //#define __LCD_INSTALLED__
 
-#define __RTC_INSTALLED__
+//#define __RTC_INSTALLED__
 
 // we don't need to send message to serial if not connected to a computer. Comment the following line if not debuging
 #define __DEBUG__
@@ -340,6 +340,15 @@ void setup()
 	// recalculate times and schedule alarms for the day. Do it around middle of the night
 	Alarm.alarmRepeat(1, 0, 0, setAllAlarmsForTheDay);
 
+#if defined (__SLEEP_MODE__)   	
+	// put wifi to sleep at night
+	Alarm.alarmRepeat(22, 30, 0, forceSleepON); 
+	Alarm.alarmRepeat(4, 00, 0, forceSleepOFF);
+	// put wifi to sleep when nobody is at home
+	Alarm.alarmRepeat(9, 30, 0, forceSleepON);
+	Alarm.alarmRepeat(15, 00, 0, forceSleepOFF);
+#endif
+
 	// if we aren't an AP, do & schedule update with dyndns, enable OTA
 	if (!configuration.isAP)
 	{		
@@ -354,6 +363,7 @@ void setup()
 		// once a day, at 2AM update the IP with the dyndns
 		Alarm.alarmRepeat(2, 00, 0, dynDNS);
 	}
+
 }
 
 void loop()
@@ -363,20 +373,20 @@ void loop()
 		ArduinoOTA.handle();
 	}
 	dnsServer.processNextRequest();
-	webServer.handleClient();
+	webServer.handleClient();	
 	Alarm.delay(0);
-#if defined (__SLEEP_MODE__)   
-	// if we are in period that nothing happens, put the esp to deep sleep to save some power
-	// GPIO16 needs to be tied to RST to wake from deepSleep. To be able to upload new firmware, disconnect the two  
-	// sleep between 1:15AM and 4AM and 9AM and 3PM
-	if (inTimePeriod(now(), 1, 15, 4, 0) || inTimePeriod(now(), 9, 0, 15, 0))
-	{
-		DEBUG_println("Sleep... ");
-		// deepSleep time is defined in microseconds. Multiply seconds by 1e6 
-		int sleepTimeS = 30 * 60; //sleep 30 min at a time
-		ESP.deepSleep(sleepTimeS * 1000000);
-	}
-#endif  
+}
+
+void forceSleepON()
+{
+	DEBUG_println("Sleep... ");
+	WiFi.forceSleepBegin();
+}
+
+void forceSleepOFF()
+{
+	DEBUG_println("Wake... ");
+	WiFi.forceSleepWake();
 }
 
 String makeHTMLButton(String action, String text)
@@ -408,7 +418,7 @@ void mainHTMLPage()
 	page += "Door closing time: " + String(doorClosingHour) + ":" + String(niceMinuteSecond(doorClosingMinute)) + "<br>";
 //	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
 //	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
-	page += "Temperature: " + String(rtc_getTemp()) + " &deg;C, " + String(rtc_getTemp() * 1.8 + 32) + " &deg;F" +"<br>";
+	//page += "Temperature: " + String(rtc_getTemp()) + " &deg;C, " + String(rtc_getTemp() * 1.8 + 32) + " &deg;F" +"<br>";
 
 	if (isDoorOpen)
 	{
@@ -428,7 +438,7 @@ void mainHTMLPage()
 		page += makeHTMLButton("/ACT=LON", "Light on");
 	}
 */
-	page += HTTP_CAMERA;
+//	page += HTTP_CAMERA;
 	page += HTTP_LINK_CONFIG_COOP;
 	// bottom of the html page
 	page += HTTP_END_COOP;
