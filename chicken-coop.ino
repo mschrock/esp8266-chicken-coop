@@ -43,7 +43,7 @@
 // if you want to use LCD
 //#define __LCD_INSTALLED__
 
-//#define __RTC_INSTALLED__
+#define __RTC_INSTALLED__
 
 // we don't need to send message to serial if not connected to a computer. Comment the following line if not debuging
 #define __DEBUG__
@@ -418,7 +418,7 @@ void mainHTMLPage()
 	page += "Door closing time: " + String(doorClosingHour) + ":" + String(niceMinuteSecond(doorClosingMinute)) + "<br>";
 //	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
 //	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
-	//page += "Temperature: " + String(rtc_getTemp()) + " &deg;C, " + String(rtc_getTemp() * 1.8 + 32) + " &deg;F" +"<br>";
+	page += "Temperature: " + String(rtc_getTemp()) + " &deg;C, " + String(rtc_getTemp() * 1.8 + 32) + " &deg;F" +"<br>";
 
 	if (isDoorOpen)
 	{
