@@ -5,7 +5,7 @@ The controller will sync the date/time from a GPS or using a NTP server. If you 
 
 The door opens automatically at sunrise and closes one hour after the sunset. 
 
-![Here is the code](https://github.com/e1ioan/esp8266-chicken-coop/blob/master/chicken-coop.ino)
+[Here is the code](https://github.com/e1ioan/esp8266-chicken-coop/blob/master/chicken-coop.ino)
 
 
 ## Code 
