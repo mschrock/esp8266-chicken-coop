@@ -35,6 +35,8 @@ The code allows the "coop door" to run connected to your wifi, or as stand alone
 
 The esp8266 controller commands a servo modified for continuous rotation to lift and lower a door (with two relays to reverse the rotation direction). The door mechanism is using pulleys (F/3), that way the servo doesn't have to work too hard.
 
+Click on the image below to see a video of the door operating:
+
 [![Coop door video](https://img.youtube.com/vi/U9hd2GVmE3A/0.jpg)](https://www.youtube.com/watch?v=U9hd2GVmE3A)
 
 Everything is powered by a 10 Watt 12 Volt solar panel
