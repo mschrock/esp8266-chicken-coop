@@ -44,4 +44,4 @@ Everything is powered by a 10 Watt 12 Volt solar panel
 ![Solar panel](http://i.imgur.com/OjkDhTW.jpg)
 
 
-
+TO DO: [Use MQTT](https://learn.adafruit.com/mqtt-adafruit-io-and-you/overview)
