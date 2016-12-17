@@ -35,7 +35,7 @@
 #include <Wire.h>
 
 // to enable deep sleep uncomment the following line
-#define __SLEEP_MODE__  
+//#define __SLEEP_MODE__  
 
 // if you want to get time from a GPS, uncomment following line
 //#define __GPS_INSTALLED__  
@@ -75,7 +75,7 @@ const char* serverOTAIndex = "<form method='POST' action='/update' enctype='mult
 // dynamic dns
 const String DYNDNS = "http://{DYNDNSIP}/nic/update?hostname={DYNDNSDOMAIN}&myip={IP}";
 
-#define COOP_VERSION "V9"
+#define COOP_VERSION "X1"
 
 struct dyndns_t
 {
@@ -206,7 +206,7 @@ void setup()
 
 	if (configuration.isAP)
 	{
-
+    WiFi.setPhyMode(WIFI_PHY_MODE_11N);
 		WiFi.mode(WIFI_AP);
 		WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 		WiFi.softAP(ssid, password);
@@ -366,6 +366,8 @@ void setup()
 
 }
 
+boolean is_sleep = false;
+
 void loop()
 {
 	if (!configuration.isAP)
@@ -373,7 +375,20 @@ void loop()
 		ArduinoOTA.handle();
 	}
 	dnsServer.processNextRequest();
-	webServer.handleClient();	
+	webServer.handleClient();
+/*	if ((minute() % 10 == 5) && !is_sleep)
+	{
+		DEBUG_println("Sleep... ");
+		WiFi.forceSleepBegin();
+		is_sleep = true;
+	}
+	else if ((minute() % 10 == 0) && is_sleep)
+	{
+		DEBUG_println("Wake... ");
+		WiFi.forceSleepWake();
+		is_sleep = false;
+	}
+*/
 	Alarm.delay(0);
 }
 
