@@ -88,12 +88,13 @@ struct dyndns_t
 } configuration;
 
 
-int door_relay1 = 12; // gpo4 - d2
-int door_relay2 = 14; // gpo14 - d5
+int door_relay1 = 14;
+int door_relay2 = 12;
+int light_relay = 2;
 
 // what is our longitude (west values negative) and latitude (south values negative)
-float latitude = 44.9308; // if you use a GPS to sync time, the value is going to be replaced by the GPS 
-float longitude = -123.0289;
+float latitude = 34.8531; // if you use a GPS to sync time, the value is going to be replaced by the GPS 
+float longitude = -82.1507;
 
 //Australia Eastern Time Zone (Sydney, Melbourne)
 TimeChangeRule aEDT = { "AEDT", First, Sun, Oct, 2, 660 };    //UTC + 11 hours
@@ -134,7 +135,7 @@ TimeChangeRule usPST = { "PST", First, dowSunday, Nov, 2, -480 }; //Standard tim
 Timezone usPT(usPDT, usPST);
 
 //Change here the region you are in. I'm in US Pacific Time Zone
-Timezone myTZ = usPT;
+Timezone myTZ = usET;
 //pointer to the time change rule, use to get the TZ offset
 TimeChangeRule *tcr;
 
@@ -172,9 +173,11 @@ void setup()
 
 	pinMode(door_relay1, OUTPUT);
 	pinMode(door_relay2, OUTPUT);
-
-	digitalWrite(door_relay1, LOW);
-	digitalWrite(door_relay2, LOW);
+	pinMode(light_relay, OUTPUT);
+	
+	digitalWrite(door_relay1, HIGH);
+	digitalWrite(door_relay2, HIGH);
+	digitalWrite(light_relay, HIGH);
 
 #if defined (__GPS_INSTALLED__)
 	// init serial for time sync with the GPS
@@ -431,8 +434,8 @@ void mainHTMLPage()
 	page += "The door is now: <b>" + (isDoorOpen ? String("OPEN") : String("CLOSED")) + "</b><br>";
 	page += "Door opening time: " + String(doorOpeningHour) + ":" + String(niceMinuteSecond(doorOpeningMinute)) + "<br>";
 	page += "Door closing time: " + String(doorClosingHour) + ":" + String(niceMinuteSecond(doorClosingMinute)) + "<br>";
-//	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
-//	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
+	page += "Light ON time: " + String(ligthOnHour) + ":" + String(niceMinuteSecond(ligthOnMinute)) + "<br>";
+	page += "Light OFF time: " + String(lightOffHour) + ":" + String(niceMinuteSecond(lightOffMinute)) + "<br>";
 	page += "Temperature: " + String(rtc_getTemp()) + " &deg;C, " + String(rtc_getTemp() * 1.8 + 32) + " &deg;F" +"<br>";
 
 	if (isDoorOpen)
@@ -443,7 +446,7 @@ void mainHTMLPage()
 	{
 		page += makeHTMLButton("/ACT=OPEN", "Open door");
 	}
-/*
+
 	if (isLightOn)
 	{
 		page += makeHTMLButton("/ACT=LOFF", "Light off");
@@ -452,7 +455,7 @@ void mainHTMLPage()
 	{
 		page += makeHTMLButton("/ACT=LON", "Light on");
 	}
-*/
+	
 //	page += HTTP_CAMERA;
 	page += HTTP_LINK_CONFIG_COOP;
 	// bottom of the html page
@@ -577,15 +580,20 @@ void handleDoorAndLight()
 	calculateTodaysSunriseSunset();
 
 	// if at this time, the door needs to be open, open it, else. close it. Same for the light
-	if (isDoorOpenPeriod())
+        // Added logic to utilize Door open or closed status to prevent wear of relays
+	if ((isDoorOpenPeriod() == true) and (isDoorOpen == false))
 	{
 		openDoor();
 	}
-	else
+	if ((isDoorOpenPeriod() == false) and (isDoorOpen == true))
 	{
 		closeDoor();
 	}
-
+	else
+	{
+	+DEBUG_println(isDoorOpenPeriod());
+	+DEBUG_println(isDoorOpen);	
+	}
 	// is it light on time?
 	if (isLightONPeriod())
 	{
@@ -689,12 +697,18 @@ String niceMinuteSecond(int m)
 void lightOn()
 {
 	isLightOn = true;
+	DEBUG_println("Turning light on...");
+	showDateTime();
+	digitalWrite(light_relay, LOW);
 	mainHTMLPage();
 }
 
 void lightOff()
 {
 	isLightOn = false;
+	DEBUG_println("Turning light off...");
+	showDateTime();
+	digitalWrite(light_relay, HIGH);
 	mainHTMLPage();
 }
 
@@ -702,9 +716,10 @@ void openDoor()
 {
 	DEBUG_println("Opening door...");
 	showDateTime();
+	digitalWrite(door_relay1, LOW); //I'm using two relays to accomplish a reversing motor control
+	digitalWrite(door_relay2, HIGH);
+	Alarm.delay(30000);  // My linear actuator takes 27 seconds to actuate, adjust as needed.
 	digitalWrite(door_relay1, HIGH);
-	Alarm.delay(100);
-	digitalWrite(door_relay1, LOW);
 	isDoorOpen = true;
 	mainHTMLPage();
 }
@@ -713,9 +728,10 @@ void closeDoor()
 {
 	DEBUG_println("Closing door...");
 	showDateTime();
-	digitalWrite(door_relay2, HIGH);
-	Alarm.delay(100);
+	digitalWrite(door_relay1, HIGH); //I'm using two relays to accomplish a reversing motor control
 	digitalWrite(door_relay2, LOW);
+	Alarm.delay(30000); //My linear actuator takes 27 seconds to actuate, adjust as needed
+	digitalWrite(door_relay2, HIGH);
 	isDoorOpen = false;
 	mainHTMLPage();
 }
