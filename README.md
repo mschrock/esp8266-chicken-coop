@@ -1,3 +1,6 @@
+Copy all files into a directory so they will all open in Arduino IDE.   Download the Libraries from the links in the .ino file
+
+
 # Chicken Coop Door 
 ## powered by esp8266
 
